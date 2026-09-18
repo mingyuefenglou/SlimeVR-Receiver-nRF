@@ -1,0 +1,33 @@
+# Copyright (c) 2026
+# SPDX-License-Identifier: Apache-2.0
+#
+# nini_slimevr_5883rx_uf2_defconfig —— 接收端板级默认配置（nini 注入）。
+# 注意：赋值行不得带行内 `#` 注释（Kconfig 会把 # 及其前空格计入值）。
+
+CONFIG_ARM_MPU=y
+CONFIG_HW_STACK_PROTECTION=y
+CONFIG_GPIO=y
+
+# 设备电源管理：led.c 的 PWM/GPIO 双模式用 pm_device_action_run 挂起/恢复
+# 共享 PWM 外设(pwm0) 以省电。
+CONFIG_PM_DEVICE=y
+
+CONFIG_SLIMEVR_USB_DEVICE_MANUFACTURER="NiNi_SlimeVR"
+CONFIG_SLIMEVR_USB_DEVICE_PRODUCT="NiNi_Unicorn & MINGYUE Smol SlimeVR 5883 Receiver"
+
+# 用 SEGGER RTT 做控制台/日志（不占 UART）
+CONFIG_USE_SEGGER_RTT=y
+CONFIG_RTT_CONSOLE=y
+CONFIG_LOG_BACKEND_RTT=y
+
+# Nordic 多协议调度层（BLE/802.15.4 共用 radio）
+CONFIG_MPSL=y
+# 射频前端（AT2401C，双控制脚 ctx/crx）——支持符号由 dts 兼容自动推导
+CONFIG_MPSL_FEM=y
+CONFIG_MPSL_FEM_SIMPLE_GPIO=y
+# 射频发射功率（含 FEM 增益）
+CONFIG_RADIO_TX_POWER=30
+
+# generate for adafruit uf2 bootloader flashing
+CONFIG_BUILD_OUTPUT_UF2=y
+CONFIG_BUILD_OUTPUT_UF2_FAMILY_ID="0x621e937a"
