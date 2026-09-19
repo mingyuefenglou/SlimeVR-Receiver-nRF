@@ -36,8 +36,8 @@
 };
 
 / {
-	model = "NiNi SlimeVR nRF52833 5883 Receiver";
-	compatible = "nini_slimevr_5883rx_uf2";
+	model = "NiNi SlimeVR nRF52833 Receiver";
+	compatible = "nini_slimevr_rx_uf2";
 
 	chosen {
 		zephyr,console = &cdc_acm_uart;

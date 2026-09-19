@@ -1,7 +1,7 @@
 # Copyright (c) 2026
 # SPDX-License-Identifier: Apache-2.0
 
-config BOARD_NINI_SLIMEVR_5883RX_UF2
+config BOARD_NINI_SLIMEVR_RX_UF2
 	select SOC_NRF52833_QDAA
 
 # FEM 说明：v3.4.0 起 MPSL_FEM_GENERIC_TWO_CTRL_PINS_SUPPORT 由 devicetree
