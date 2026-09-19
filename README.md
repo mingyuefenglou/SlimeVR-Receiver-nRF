@@ -16,12 +16,11 @@
 ```bash
 west init -l app
 west update
-export ZEPHYR\\\_SDK\\\_INSTALL\\\_DIR=/opt/zephyr-sdk-1.0.1
-west build -b nini\\\_slimevr\\\_5883rx\\\_uf2 -d build --sysbuild --pristine -s app -- \\\\
-  -DBOARD\\\_ROOT=$PWD/app
+export ZEPHYR_SDK_INSTALL_DIR=/opt/zephyr-sdk-1.0.1
+west build -b nini_slimevr_5883rx_uf2 -d build --sysbuild --pristine -s app ---DBOARD_ROOT=$PWD/app
 ```
 
-注：v3.4.0 起 `MPSL\\\_FEM\\\_GENERIC\\\_TWO\\\_CTRL\\\_PINS\\\_SUPPORT` 由 devicetree 兼容串自动推导（板 dts 已带 `radio-fem-two-ctrl-pins`），无需也不可在配置文件里手工赋值。
+注：v3.4.0 起 `MPSL_FEM_GENERIC_TWO_CTRL_PINS_SUPPORT` 由 devicetree 兼容串自动推导（板 dts 已带 `radio-fem-two-ctrl-pins`），无需也不可在配置文件里手工赋值。
 
 ## 许可
 
