@@ -82,6 +82,21 @@ static int current_priority;
 
 volatile uint16_t led_cal_progress; // 全局定义：非三色板链接占位
 
+// receiver 专属：已连 tracker 台数（esb 周期更新；1-10）。全局定义——esb.c 无条件调用，
+// 非三色板也需要符号存在（值仅三色渲染消费）
+static uint8_t led_tracker_count = 1;
+
+void led_set_tracker_count(uint8_t count)
+{
+	if (count < 1) {
+		count = 1;
+	}
+	if (count > 10) {
+		count = 10;
+	}
+	led_tracker_count = count;
+}
+
 #if LED_EXISTS || LED_STRIP_EXISTS
 static enum sys_led_pattern led_patterns[SYS_LED_PATTERN_DEPTH]
 	= {[0 ...(SYS_LED_PATTERN_DEPTH - 1)] = SYS_LED_PATTERN_OFF};
@@ -138,6 +153,7 @@ static void led_pin_reset(void)
 static void led_suspend(void)
 {
 	LOG_DBG("led_suspend");
+#if defined(CONFIG_PM_DEVICE)
 #ifdef LED_STRIP_EXISTS
 	pm_device_action_run(strip, PM_DEVICE_ACTION_SUSPEND);
 #endif
@@ -149,6 +165,7 @@ static void led_suspend(void)
 #endif
 #ifdef PWM_LED2_EXISTS
 	pm_device_action_run(pwm_led2.dev, PM_DEVICE_ACTION_SUSPEND);
+#endif
 #endif
 	led_pin_reset();
 	// disable power
@@ -166,6 +183,7 @@ static void led_resume(void)
 	gpio_pin_configure_dt(&led_en, GPIO_OUTPUT);
 	gpio_pin_set_dt(&led_en, 1);
 #endif
+#if defined(CONFIG_PM_DEVICE)
 #ifdef LED_STRIP_EXISTS
 	pm_device_action_run(strip, PM_DEVICE_ACTION_RESUME);
 #endif
@@ -177,6 +195,7 @@ static void led_resume(void)
 #endif
 #ifdef PWM_LED2_EXISTS
 	pm_device_action_run(pwm_led2.dev, PM_DEVICE_ACTION_RESUME);
+#endif
 #endif
 	led_pin_init();
 }
@@ -307,19 +326,6 @@ struct led_channel {
 static struct led_channel chans[LED_CH_COUNT];
 static enum led_display_mode led_mode = LED_MODE_DAILY;
 static uint16_t led_brightness_pptt = 10000; // 全局亮度乘数（一改全改）
-
-static uint8_t led_tracker_count = 1; // 已连 tracker 台数（esb 周期更新；1-10）
-
-void led_set_tracker_count(uint8_t count)
-{
-	if (count < 1) {
-		count = 1;
-	}
-	if (count > 10) {
-		count = 10;
-	}
-	led_tracker_count = count;
-}
 
 // 琥珀分量（充电/低电/OTA 的红绿混色比）
 #define AMBER_RED_PPTT 6000
