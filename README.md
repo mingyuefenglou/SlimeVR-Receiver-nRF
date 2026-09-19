@@ -22,6 +22,22 @@ west build -b nini_slimevr_5883rx_uf2 -d build --sysbuild --pristine -s app ---D
 
 注：v3.4.0 起 `MPSL_FEM_GENERIC_TWO_CTRL_PINS_SUPPORT` 由 devicetree 兼容串自动推导（板 dts 已带 `radio-fem-two-ctrl-pins`），无需也不可在配置文件里手工赋值。
 
+## LED 状态指示（三通道）
+
+console 命令（重启保持）：`ledmode daily|debug`（日常=呼吸族·默认 / 调试=闪烁族）、`ledbright 5-100`（全局亮度，一改全改）。
+
+**灯语**：绿=供电在岗；蓝=通讯域；红=异常独占。与 tracker 端形成呼应——两端同时亮起同款错峰双呼吸 = 链路活着。
+
+| 状态 | 日常表（呼吸族） | 调试表（闪烁族） |
+|---|---|---|
+| 上电在岗、无 tracker | 仅绿慢呼吸 10s | 绿 300ms blip/10s |
+| 与 tracker 通讯中（核心态） | 绿呼吸 + 蓝心跳呼吸（错峰 2.5s；**峰值随台数渐满**：1 台 25% → 10 台 55%） | 绿 blip + 蓝连跳（**次数=台数**，1-10 可数） |
+| 配对模式（等新 tracker） | 绿呼吸 + 蓝双短呼吸 | 绿 blip + 蓝快闪 |
+| 新 tracker 入网 | 蓝渐亮确认 | 蓝连闪 |
+| USB 通讯/调参会话 | 绿呼吸 + 蓝 15% 低常亮 | 绿 blip + 蓝 20% 常亮 |
+| 错误 | 红（独占三灯）5s 深呼吸 | 红→绿→蓝三色轮播 |
+| 断电 | 全彩渐灭 | 渐灭 |
+
 ## 许可
 
 沿袭上游 Apache-2.0，见仓库 `LICENSE`。
