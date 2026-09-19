@@ -11,6 +11,8 @@
 // 0-255 -> id 3-258
 
 #define RF_CHANNEL 259  // NVS key for receiver RF channel
+#define LED_MODE_NVS 260    // NVS key: LED 分配表（0=日常 1=调试）
+#define LED_BRIGHT_NVS 261  // NVS key: LED 全局亮度百分比
 
 uint8_t reboot_counter_read(void);
 void reboot_counter_write(uint8_t reboot_counter);

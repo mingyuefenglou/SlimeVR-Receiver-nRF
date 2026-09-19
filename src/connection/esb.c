@@ -123,6 +123,11 @@ static uint8_t tdma_config_epoch;         // wrapping counter, incremented on ea
 static uint8_t tdma_dynamic_active_count; // current number of active trackers
 static uint8_t tdma_dynamic_slot_ticks;   // current slot width in ticks
 static uint32_t tdma_active_mask;         // bitmask of active trackers (for change detection)
+
+uint8_t esb_get_active_tracker_count(void)
+{
+	return tdma_dynamic_active_count;
+}
 static int64_t tdma_last_reconfig_time;   // timestamp of last reconfiguration (0 = never)
 /* Loss-controller state, evaluated once per 1 s stats tick. */
 static uint8_t tdma_cap_level;           /* index into tdma_cap_ladder */
@@ -1345,8 +1350,20 @@ static void esb_stats_thread(void)
 {
 	last_tps_print_time = k_uptime_get();
 
+	uint8_t led_last_count = 0xFF;
 	while (1) {
 		k_msleep(TPS_MONITOR_INTERVAL_MS);
+		// LED：台数变化时刷新（蓝心跳充沛度/连跳次数；无连接→OFF，配对期除外）
+		uint8_t cnt = esb_get_active_tracker_count();
+		if (cnt != led_last_count) {
+			led_last_count = cnt;
+			led_set_tracker_count(cnt > 0 ? cnt : 1);
+			if (cnt > 0) {
+				set_led(SYS_LED_PATTERN_CONNECT_HEARTBEAT, SYS_LED_PRIORITY_CONNECTION);
+			} else if (!esb_pairing) {
+				set_led(SYS_LED_PATTERN_OFF, SYS_LED_PRIORITY_CONNECTION);
+			}
+		}
 
 		uint64_t now = (uint64_t)k_uptime_get();
 
@@ -2954,7 +2971,7 @@ static void process_pairing_queue(void)
 		// Device is now registered — ack_handler will respond on the
 		// next pairing step 1 via esb_find_tracker() lookup.
 		LOG_INF("New device registered, ack_handler will respond on next step 1");
-		set_led(SYS_LED_PATTERN_ONESHOT_PROGRESS, SYS_LED_PRIORITY_HIGHEST);
+		set_led(SYS_LED_PATTERN_ONESHOT_COMPLETE, SYS_LED_PRIORITY_HIGHEST); // 入网确认
 	}
 }
 

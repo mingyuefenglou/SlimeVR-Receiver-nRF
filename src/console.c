@@ -818,6 +818,8 @@ static void console_thread(void)
 	const char command_clearchannel[] = "clearchannel";
 	const char command_rssi_scan[] = "rssi_scan";
 	const char command_send[] = "send";
+	const char command_ledmode[] = "ledmode";
+	const char command_ledbright[] = "ledbright";
 	const char command_help[] = "help";
 
 #if DFU_EXISTS
@@ -975,6 +977,31 @@ static void console_thread(void)
 			printk("Receiver RF channel cleared (local only)\n");
 		} else if (strcmp(argv[0], command_send) == 0) {
 			console_handle_send(arg, arg2, arg3, arg4, arg5);
+		} else if (strcmp(argv[0], command_ledmode) == 0) {
+			if (!arg) {
+				printk("ledmode: %s (daily=breathing / debug=blinking)\n",
+				       get_led_mode() == LED_MODE_DEBUG ? "debug" : "daily");
+			} else if (strcmp(arg, "debug") == 0) {
+				set_led_mode(LED_MODE_DEBUG);
+				printk("ledmode: debug on\n");
+			} else if (strcmp(arg, "daily") == 0) {
+				set_led_mode(LED_MODE_DAILY);
+				printk("ledmode: daily on\n");
+			} else {
+				printk("Usage: ledmode [daily|debug]\n");
+			}
+		} else if (strcmp(argv[0], command_ledbright) == 0) {
+			if (!arg) {
+				printk("ledbright: %u%%\n", get_led_brightness());
+			} else {
+				long v = strtol(arg, NULL, 10);
+				if (v < 5 || v > 100) {
+					printk("Invalid. Range 5-100\n");
+				} else {
+					set_led_brightness((uint8_t)v);
+					printk("ledbright: %ld%% on\n", v);
+				}
+			}
 		}
 #if DFU_EXISTS
 		else if (strcmp(argv[0], command_dfu) == 0) {
