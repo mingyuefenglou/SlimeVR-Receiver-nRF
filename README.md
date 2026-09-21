@@ -11,7 +11,7 @@
 
 ## SDK 与编译环境
 
-`west.yml` 选定 [jitingcn/sdk-nrf](https://github.com/jitingcn/sdk-nrf) `v3.4-branch`（pin ab62f8df，NCS v3.4.0 基）。构建需 **Zephyr SDK 1.0.1 GNU** + **Python 3.12**；CI 在 Ubuntu 24.04。
+`west.yml` 选定 [jitingcn/sdk-nrf](https://github.com/jitingcn/sdk-nrf) `v3.4-branch`（跟随分支；NCS v3.4.0 基）。构建需 **Zephyr SDK 1.0.1 GNU** + **Python 3.12**；CI 在 Ubuntu 24.04。
 
 ```bash
 west init -l app
