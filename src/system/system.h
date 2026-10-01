@@ -13,9 +13,13 @@
 #define RF_CHANNEL 259  // NVS key for receiver RF channel
 #define LED_MODE_NVS 260    // NVS key: LED 分配表（0=日常 1=调试）
 #define LED_BRIGHT_NVS 261  // NVS key: LED 全局亮度百分比
+#define LED_BIND_NVS 262    // NVS key: LED 绑定（物理位 LED1/2/3 各为何色 0=R 1=G 2=B，3 字节排列）
 
 uint8_t reboot_counter_read(void);
 void reboot_counter_write(uint8_t reboot_counter);
+
+/* Complete RESETREAS snapshot captured once at PRE_KERNEL_1, before W1C. */
+uint32_t sys_get_reset_reason(void);
 
 void sys_write(uint16_t id, void* ptr, const void* data, size_t len);
 void sys_read(uint16_t id, void* data, size_t len);

@@ -28,6 +28,32 @@ static struct nvs_fs fs;
 
 LOG_MODULE_REGISTER(system, LOG_LEVEL_INF);
 
+/* Sole owner of RESETREAS: preserve every cause before clearing the W1C
+ * register, so later consumers (e.g. the VBUS button-guard below) read a stable
+ * snapshot and a stale RESETPIN bit can never survive into a later boot
+ * (receiver 断电必进 BL 的 H2 诱因：app 从不清 RESETREAS，残留位被 BL 误判）。
+ * 与 tracker 的 PRE_KERNEL_1 属主同构。 */
+static uint32_t boot_reset_reason;
+
+static int sys_reset_reason_init(void)
+{
+#ifdef NRF_RESET
+	boot_reset_reason = NRF_RESET->RESETREAS;
+	NRF_RESET->RESETREAS = boot_reset_reason;
+#else
+	boot_reset_reason = NRF_POWER->RESETREAS;
+	NRF_POWER->RESETREAS = boot_reset_reason;
+#endif
+	return 0;
+}
+
+SYS_INIT(sys_reset_reason_init, PRE_KERNEL_1, 0);
+
+uint32_t sys_get_reset_reason(void)
+{
+	return boot_reset_reason;
+}
+
 // Button support
 #if DT_NODE_HAS_PROP(DT_ALIAS(sw0), gpios)
 #define BUTTON_EXISTS true
@@ -149,10 +175,11 @@ static struct gpio_callback button_cb_data;
 
 static int sys_button_init(void)
 {
+	// RESETREAS 已于 PRE_KERNEL_1 快照并清除——此处须读快照而非寄存器（否则恒 0，VBUS 守卫失效）
 #ifdef NRF_RESET
-	bool reset_vbus_reset = NRF_RESET->RESETREAS & RESET_RESETREAS_VBUS_Msk;
+	bool reset_vbus_reset = sys_get_reset_reason() & RESET_RESETREAS_VBUS_Msk;
 #else
-	bool reset_vbus_reset = NRF_POWER->RESETREAS & POWER_RESETREAS_VBUS_Msk;
+	bool reset_vbus_reset = sys_get_reset_reason() & POWER_RESETREAS_VBUS_Msk;
 #endif
 	gpio_pin_configure_dt(&button0, GPIO_INPUT);
 	gpio_pin_interrupt_configure_dt(&button0, GPIO_INT_EDGE_BOTH);
