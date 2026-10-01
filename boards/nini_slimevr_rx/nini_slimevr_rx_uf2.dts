@@ -3,8 +3,8 @@
 //
 // nini_slimevr_5883rx_uf2.dts —— 接收端(receiver)板级设备树（nini 注入）。
 // SoC nRF52833（nrf52833_qdaa.dtsi）。与旧板 nini_slimevr_uf2 的差异：
-//   · 三色 LED 改【共阴】（高电平点亮）、引脚重排：绿 P0.30 / 蓝 P0.29 / 红 P0.28；
-//     新板绿蓝焊对——不移植旧板 apply_pwm 对调补偿；
+//   · 三色 LED 改【共阴】（高电平点亮）、引脚重排：绿 P0.30 / 红 P0.29 / 蓝 P0.28
+//     （实测订正：换 LED 后红蓝对调）；
 //   · FEM 换 AT2401C：compatible 只写通用绑定 radio-fem-two-ctrl-pins
 //     （不写 skyworks 型号），ctx=P0.17 / crx=P0.15，增益按 AT2401C 起步 22/12 后调；
 //   · reg1 改 DCDC（旧板为 LDO）；
@@ -18,18 +18,18 @@
 &pinctrl {
 	pwm0_default: pwm0_default {
 		group1 {
-			psels = <NRF_PSEL(PWM_OUT0, 0, 28)>, //red
+			psels = <NRF_PSEL(PWM_OUT0, 0, 28)>, //blue（实测订正）
 				<NRF_PSEL(PWM_OUT1, 0, 30)>, //green
-				<NRF_PSEL(PWM_OUT2, 0, 29)>; //blue
+				<NRF_PSEL(PWM_OUT2, 0, 29)>; //red（实测订正）
 			nordic,drive-mode = <NRF_DRIVE_S0H1>;
 		};
 	};
 
 	pwm0_sleep: pwm0_sleep {
 		group1 {
-			psels = <NRF_PSEL(PWM_OUT0, 0, 28)>, //red
+			psels = <NRF_PSEL(PWM_OUT0, 0, 28)>, //blue（实测订正）
 				<NRF_PSEL(PWM_OUT1, 0, 30)>, //green
-				<NRF_PSEL(PWM_OUT2, 0, 29)>; //blue
+				<NRF_PSEL(PWM_OUT2, 0, 29)>; //red（实测订正）
 			low-power-enable;
 		};
 	};
@@ -69,7 +69,7 @@
 	leds {
 		compatible = "gpio-leds";
 		led0_red: led_0 {
-			gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;   // 红灯 P0.28（共阴高电平点亮）
+			gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;   // 红灯 P0.29（实测订正：换 LED 后红蓝对调）
 			label = "Red LED 0";
 		};
 		led0_green: led_1 {
@@ -77,7 +77,7 @@
 			label = "Green LED 0";
 		};
 		led0_blue: led_2 {
-			gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;   // 蓝灯 P0.29
+			gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;   // 蓝灯 P0.28（实测订正）
 			label = "Blue LED 0";
 		};
 	};
@@ -85,13 +85,13 @@
 	pwmleds {
 		compatible = "pwm-leds";
 		red_pwm_led: pwm_led_0 {
-			pwms = <&pwm0 0 PWM_MSEC(1) PWM_POLARITY_NORMAL>;
+			pwms = <&pwm0 2 PWM_MSEC(1) PWM_POLARITY_NORMAL>;   // 红→P0.29（实测订正）
 		};
 		green_pwm_led: pwm_led_1 {
 			pwms = <&pwm0 1 PWM_MSEC(1) PWM_POLARITY_NORMAL>;
 		};
 		blue_pwm_led: pwm_led_2 {
-			pwms = <&pwm0 2 PWM_MSEC(1) PWM_POLARITY_NORMAL>;
+			pwms = <&pwm0 0 PWM_MSEC(1) PWM_POLARITY_NORMAL>;   // 蓝→P0.28（实测订正）
 		};
 	};
 
