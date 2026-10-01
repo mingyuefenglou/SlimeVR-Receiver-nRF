@@ -210,6 +210,17 @@ static void print_help(void)
 #endif
 
 	printk(
+		"LED (Tri-color):\n"
+		"  ledmode [daily|debug]      LED 分配表：日常=呼吸族 / 调试=闪烁族（无参查当前）\n"
+		"  ledbright <0-100>          全局亮度百分比（0=全灭；无参查当前，重启保持）\n"
+		"  ledmap                     查 LED 绑定：物理位 LED1/2/3 各是什么色\n"
+		"  ledmap LED1 R LED2 G LED3 B  全量指派（三位须为 R/G/B 各一次，重复拒绝）\n"
+		"  ledmap LED1 R              单点=交换语义：LED1 与当前占 R 的位对调\n"
+		"  ledmap reset               回板默认 LED1=R LED2=G LED3=B（重启保持）\n"
+		"\n"
+	);
+
+	printk(
 		"Other:\n"
 		"  collect <id>               Start raw sensor data collection from tracker\n"
 		"  collectall <rate_hz>       Start batch raw data collection from all paired trackers\n"
@@ -799,6 +810,90 @@ void console_serial_stop(void)
 	k_spin_unlock(&console_input.lock, key);
 }
 
+/* LED 绑定：物理位 LED1/2/3（=dts pwm-led0/1/2）各是什么色——换灯/色序不同免重编，重启保持。
+ * 无参显示当前；'ledmap LED1 R LED2 G LED3 B' 全量指派（三位的色必须是 R/G/B 各一次，
+ * 重复直接拒绝——规避「全指向蓝」矛盾）；'ledmap LED1 R' 单点=交换语义（LED1 与当前
+ * 占 R 的位对调色，永不产生重复）；'ledmap reset' 回板默认（LED1=R LED2=G LED3=B）。 */
+static void console_handle_ledmap(size_t argc, char **argv)
+{
+	static const char color_names[3] = {'R', 'G', 'B'};
+
+	if (argc == 1) {
+		uint8_t cur[3];
+		get_led_binding(cur);
+		printk("ledmap: LED1=%c LED2=%c LED3=%c（物理位→色；ledmap [LEDx R|G|B ...] 改，reset 回默认）\n",
+		       color_names[cur[0]], color_names[cur[1]], color_names[cur[2]]);
+		return;
+	}
+	if (strcmp(argv[1], "reset") == 0) {
+		reset_led_binding();
+		printk("ledmap: 已回板默认 LED1=R LED2=G LED3=B 并持久化\n");
+		return;
+	}
+
+	size_t pairs = (argc - 1) / 2;
+	if ((argc - 1) % 2 != 0 || pairs < 1 || pairs > 3) {
+		printk("Error: 参数须成对：ledmap [LED1 R] [LED2 G] [LED3 B]，或 ledmap reset\n");
+		return;
+	}
+	int pp[3], cc[3];
+	for (size_t i = 0; i < pairs; i++) {
+		const char *pos = argv[1 + i * 2];
+		const char *col = argv[2 + i * 2];
+		pp[i] = (strcmp(pos, "led1") == 0) ? 0 :
+		        (strcmp(pos, "led2") == 0) ? 1 :
+		        (strcmp(pos, "led3") == 0) ? 2 : -1;
+		cc[i] = (strlen(col) == 1 && col[0] == 'r') ? 0 :
+		        (strlen(col) == 1 && col[0] == 'g') ? 1 :
+		        (strlen(col) == 1 && col[0] == 'b') ? 2 : -1;
+		if (pp[i] < 0 || cc[i] < 0) {
+			printk("Error: 无法识别 '%s %s'——位须为 LED1/LED2/LED3，色须为 R/G/B\n", pos, col);
+			return;
+		}
+		for (size_t j = 0; j < i; j++) {
+			if (pp[j] == pp[i]) {
+				printk("Error: LED%d 被重复指定\n", pp[i] + 1);
+				return;
+			}
+		}
+	}
+
+	uint8_t next[3];
+	get_led_binding(next);
+	if (pairs == 3) {
+		// 全量指派：严格校验为 R/G/B 排列（不允许重复/缺色）
+		for (size_t i = 0; i < 3; i++) {
+			next[pp[i]] = (uint8_t)cc[i];
+		}
+		if (!set_led_binding(next)) {
+			printk("Error: 三位的色必须是 R/G/B 各一次（不允许重复/缺色）\n");
+			return;
+		}
+	} else {
+		// 单点/两对=交换语义：被点名位与「当前占目标色的位」对调（天然不产生重复）
+		for (size_t i = 0; i < pairs; i++) {
+			int p = pp[i];
+			uint8_t want = (uint8_t)cc[i];
+			if (next[p] == want) {
+				continue; // 已是目标色
+			}
+			for (int holder = 0; holder < 3; holder++) {
+				if (next[holder] == want) {
+					next[holder] = next[p];
+					next[p] = want;
+					break;
+				}
+			}
+		}
+		if (!set_led_binding(next)) { // 交换必为排列，理论不失败
+			printk("Error: 绑定结果非法\n");
+			return;
+		}
+	}
+	printk("ledmap: LED1=%c LED2=%c LED3=%c 已生效并持久化\n",
+	       color_names[next[0]], color_names[next[1]], color_names[next[2]]);
+}
+
 static void console_thread(void)
 {
 
@@ -820,6 +915,7 @@ static void console_thread(void)
 	const char command_send[] = "send";
 	const char command_ledmode[] = "ledmode";
 	const char command_ledbright[] = "ledbright";
+	const char command_ledmap[] = "ledmap";
 	const char command_help[] = "help";
 
 #if DFU_EXISTS
@@ -992,16 +1088,18 @@ static void console_thread(void)
 			}
 		} else if (strcmp(argv[0], command_ledbright) == 0) {
 			if (!arg) {
-				printk("ledbright: %u%%\n", get_led_brightness());
+				printk("ledbright: %u%%（范围 0-100，全局生效，重启保持）\n", get_led_brightness());
 			} else {
 				long v = strtol(arg, NULL, 10);
-				if (v < 5 || v > 100) {
-					printk("Invalid. Range 5-100\n");
+				if (v < 0 || v > 100) {
+					printk("Invalid. Range 0-100\n");
 				} else {
 					set_led_brightness((uint8_t)v);
 					printk("ledbright: %ld%% on\n", v);
 				}
 			}
+		} else if (strcmp(argv[0], command_ledmap) == 0) {
+			console_handle_ledmap(argc, argv);
 		}
 #if DFU_EXISTS
 		else if (strcmp(argv[0], command_dfu) == 0) {
