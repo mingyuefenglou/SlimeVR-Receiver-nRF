@@ -1,6 +1,20 @@
 # NiNi SlimeNRF Receiver 固件
 
-基于 SlimeNRF 生态的 nRF52833 接收器（dongle/hub）固件。
+> 基于 SlimeNRF 生态的 nRF52833 接收器（dongle/hub）固件 —— ESB 协议、USB HID、三共阴 LED、ESB OTA。
+
+[![build](https://github.com/mingyuefenglou/SlimeVR-Receiver-nRF/actions/workflows/workflow.yml/badge.svg?branch=NiNi_Slime_5883)](https://github.com/mingyuefenglou/SlimeVR-Receiver-nRF/actions/workflows/workflow.yml)
+![NCS](https://img.shields.io/badge/NCS-v3.4.1_LTS-00A9CE)
+![MCU](https://img.shields.io/badge/MCU-nRF52833-333333)
+![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey)
+
+## 特性
+
+| 模块 | 说明 |
+|---|---|
+| **协议** | SlimeVR ESB 接收（多 tracker 汇聚）· 远程命令（fusion reset / tcal 校准）· USB HID（带卡死自愈冷却）· tracker 事件订阅 · TDMA 槽位偏移监测 |
+| **LED** | 三通道，日常（呼吸）/调试（闪烁）双状态表；蓝=通讯域（心跳峰值随台数渐满 / 连跳次数=台数）；`ledmap` 免重编重绑 |
+| **升级** | ESB OTA + UF2 双路；配套 BL 断电/误触多重加固（断电直进 APP，不再卡 BL 须重刷） |
+| **工具** | 采集工具链（data_collect CDC 变体）· console 调参 |
 
 ## 分支说明
 
@@ -34,21 +48,33 @@ west build -b nini_slimevr_rx_uf2 -d build --sysbuild --pristine -s app -- -DBOA
 
 ## LED 状态指示（三通道）
 
-console 命令（重启保持）：`ledmode daily|debug`（日常=呼吸族·默认 / 调试=闪烁族）、`ledbright 0-100`（全局亮度，0=全灭，一改全改，默认 80%）、`ledmap`（LED 绑定：查/改物理位 LED1/2/3 各是什么色——`ledmap LED1 R LED2 G LED3 B` 全量指派须为 R/G/B 排列、重复拒绝；`ledmap LED1 R` 单点=交换语义；`ledmap reset` 回默认）。本板默认引脚映射：**红=P0.29、绿=P0.30、蓝=P0.28**（pwm0 通道 2/1/0），共阴 LED、GPIO 经 1kΩ 限流，换色序不同的灯用 `ledmap` 改路由即可、免重编。
+console 命令（重启保持）：
+
+| 命令 | 作用 |
+|---|---|
+| `ledmode` | 查看当前模式 |
+| `ledmode daily\|debug` | 切日常（呼吸族·默认）/调试（闪烁族）状态表 |
+| `ledbright` | 查看全局亮度 |
+| `ledbright 0-100` | 全局亮度（0=全灭，一改全改，默认 80%） |
+| `ledmap` | 查看 LED 绑定：物理位 LED1/2/3 各是什么色 |
+| `ledmap LED1 R LED2 G LED3 B` | 全量指派（三位须为 R/G/B 各一次，重复直接拒绝） |
+| `ledmap LED1 R` | 单点=交换语义：LED1 与当前占 R 的位对调 |
+| `ledmap reset` | 回板默认 LED1=R LED2=G LED3=B |
+
+**LED 绑定（`ledmap`）**：本板默认引脚映射 **红=P0.29、绿=P0.30、蓝=P0.28**（pwm0 通道 2/1/0），共阴 LED、GPIO 经 1kΩ 限流。换用不同色序的灯用 `ledmap` 改路由即可、免重编，重启保持。
 
 **灯语**：绿=供电在岗；蓝=通讯域；红=异常独占。与 tracker 端形成呼应——两端同时亮起同款错峰双呼吸 = 链路活着。
 
 | 状态 | 日常表（呼吸族） | 调试表（闪烁族） |
 |---|---|---|
-| 上电在岗、无 tracker | 仅绿慢呼吸 10s | 绿 300ms blip/10s |
-| 与 tracker 通讯中（核心态） | 绿呼吸 + 蓝心跳呼吸（错峰 2.5s；**峰值随台数渐满**：1 台 25% → 10 台 55%） | 绿 blip + 蓝连跳（**次数=台数**，1-10 可数） |
-| 配对模式（等新 tracker） | 绿呼吸 + 蓝双短呼吸 | 绿 blip + 蓝快闪 |
-| 新 tracker 入网 | 蓝渐亮确认 | 蓝连闪 |
-| USB 通讯/调参会话 | 绿呼吸 + 蓝 15% 低常亮 | 绿 blip + 蓝 20% 常亮 |
-| 错误 | 红（独占三灯）5s 深呼吸 | 红→绿→蓝三色轮播 |
+| 上电在岗、无 tracker | 仅 🟢 绿慢呼吸 10s | 🟢 绿 300ms blip/10s |
+| 与 tracker 通讯中（核心态） | 🟢 绿呼吸 + 🔵 蓝心跳呼吸（错峰 2.5s；**峰值随台数渐满**：1 台 25% → 10 台 55%） | 🟢 绿 blip + 🔵 蓝连跳（**次数=台数**，1-10 可数） |
+| 配对模式（等新 tracker） | 🟢 绿呼吸 + 🔵 蓝双短呼吸 | 🟢 绿 blip + 🔵 蓝快闪 |
+| 新 tracker 入网 | 🔵 蓝渐亮确认 | 🔵 蓝连闪 |
+| USB 通讯/调参会话 | 🟢 绿呼吸 + 🔵 蓝 15% 低常亮 | 🟢 绿 blip + 🔵 蓝 20% 常亮 |
+| 错误 | 🔴 红（独占三灯）5s 深呼吸 | 🔴→🟢→🔵 三色轮播 |
 | 断电 | 全彩渐灭 | 渐灭 |
 
 ## 许可
 
 沿袭上游 Apache-2.0，见仓库 `LICENSE`。
-
