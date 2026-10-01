@@ -21,20 +21,20 @@
 
 ## SDK 与编译环境
 
-`west.yml` 选定 [jitingcn/sdk-nrf](https://github.com/jitingcn/sdk-nrf) `v3.4-branch`（跟随分支；NCS v3.4.0 基）。构建需 **Zephyr SDK 1.0.1 GNU** + **Python 3.12**；CI 在 Ubuntu 24.04。
+`west.yml` 选定 [jitingcn/sdk-nrf](https://github.com/jitingcn/sdk-nrf) `v3.4-branch`（跟随分支；NCS v3.4.1 LTS 基）。构建需 **Zephyr SDK 1.0.1 GNU** + **Python 3.12**；CI 在 Ubuntu 24.04。
 
 ```bash
 west init -l app
 west update
 export ZEPHYR_SDK_INSTALL_DIR=/opt/zephyr-sdk-1.0.1
-west build -b nini_slimevr_5883rx_uf2 -d build --sysbuild --pristine -s app ---DBOARD_ROOT=$PWD/app
+west build -b nini_slimevr_rx_uf2 -d build --sysbuild --pristine -s app -- -DBOARD_ROOT=$PWD/app
 ```
 
 注：v3.4.0 起 `MPSL_FEM_GENERIC_TWO_CTRL_PINS_SUPPORT` 由 devicetree 兼容串自动推导（板 dts 已带 `radio-fem-two-ctrl-pins`），无需也不可在配置文件里手工赋值。
 
 ## LED 状态指示（三通道）
 
-console 命令（重启保持）：`ledmode daily|debug`（日常=呼吸族·默认 / 调试=闪烁族）、`ledbright 5-100`（全局亮度，一改全改）。
+console 命令（重启保持）：`ledmode daily|debug`（日常=呼吸族·默认 / 调试=闪烁族）、`ledbright 0-100`（全局亮度，0=全灭，一改全改，默认 80%）、`ledmap`（LED 绑定：查/改物理位 LED1/2/3 各是什么色——`ledmap LED1 R LED2 G LED3 B` 全量指派须为 R/G/B 排列、重复拒绝；`ledmap LED1 R` 单点=交换语义；`ledmap reset` 回默认）。本板默认引脚映射：**红=P0.29、绿=P0.30、蓝=P0.28**（pwm0 通道 2/1/0），共阴 LED、GPIO 经 1kΩ 限流，换色序不同的灯用 `ledmap` 改路由即可、免重编。
 
 **灯语**：绿=供电在岗；蓝=通讯域；红=异常独占。与 tracker 端形成呼应——两端同时亮起同款错峰双呼吸 = 链路活着。
 
