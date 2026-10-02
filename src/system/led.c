@@ -325,7 +325,7 @@ struct led_channel {
 
 static struct led_channel chans[LED_CH_COUNT];
 static enum led_display_mode led_mode = LED_MODE_DAILY;
-static uint16_t led_brightness_pptt = 6000; // 全局亮度乘数（默认 60%，ledbright 0-100 可调；呼吸图案峰=满刻度，此值即峰顶占空）
+static uint16_t led_brightness_pptt = 8000; // 全局亮度乘数=全域最大亮度（默认 80%，ledbright 0-100 可调；所有灯效受它缩放，此值即峰顶占空）
 
 /* LED 绑定表：物理位 LED1/2/3（=dts pwm-led0/1/2）上各是什么语义色（0=R 1=G 2=B）。
  * 默认恒等（pwm-led0=红/1=绿/2=蓝，与 dts 色序约定一致）。
@@ -362,6 +362,7 @@ static uint32_t pattern_mask(enum sys_led_pattern p)
 	case SYS_LED_PATTERN_OFF_FORCE:
 	case SYS_LED_PATTERN_OFF:
 	case SYS_LED_PATTERN_ONESHOT_POWEROFF:
+	case SYS_LED_PATTERN_ONESHOT_FULL_COLOR: // 全彩命中动画（独占三通道）
 	case SYS_LED_PATTERN_ERROR_A:
 	case SYS_LED_PATTERN_ERROR_B:
 	case SYS_LED_PATTERN_ERROR_C:
@@ -371,6 +372,7 @@ static uint32_t pattern_mask(enum sys_led_pattern p)
 	case SYS_LED_PATTERN_ONESHOT_PING:
 	case SYS_LED_PATTERN_SHORT:
 	case SYS_LED_PATTERN_CONNECT_HEARTBEAT:
+	case SYS_LED_PATTERN_IDLE_HEARTBEAT:
 		return CH_B; // 蓝=链路/即时反馈
 	case SYS_LED_PATTERN_ONESHOT_POWERON:
 		return CH_G; // 开机确认=绿（1.2s 常亮）
@@ -428,11 +430,10 @@ static uint32_t led_compute(enum led_ch ch, enum sys_led_pattern p, uint32_t *st
 		st = 200;
 		break;
 
-	case SYS_LED_PATTERN_ACTIVE_PERSIST: { // 绿·工作（在岗）
+	case SYS_LED_PATTERN_ACTIVE_PERSIST: { // 绿·工作指示（一切状态的底）
 		if (daily) {
-			// 30s 墙钟栅格 swell：1.2s 升+1.2s 降 @0s，峰=满刻度（ledbright 定标基准）
-			v = breath_shape(now % 30000, 30000, 1200, 1200, 10000);
-			st = 20;
+			v = (now % 3000) < 300 ? 10000 : 0; // 每 3s 短闪一次（300ms 亮）
+			st = 50;
 		} else {
 			v = (now % 10000) < 300 ? 10000 : 0; // 300ms blip/10s
 			st = 50;
@@ -440,18 +441,17 @@ static uint32_t led_compute(enum led_ch ch, enum sys_led_pattern p, uint32_t *st
 		break;
 	}
 
-	case SYS_LED_PATTERN_CONNECT_HEARTBEAT: { // 蓝·链路心跳（30s 栅格 @15s 反相，与绿 swell 永不错峰重叠）
-		uint32_t phase = (now + 15000) % 30000; // 相位后移 15s → 与绿 swell 互为反相
-		// 多 tracker：日常=充沛度（峰 50%+5%×(N-1)）；调试=连跳 N 次（120ms/跳）
-		uint32_t peak = 5000 + 500 * (led_tracker_count - 1); /* 1 台 50% → 10 台顶格 */
-			if (peak > 10000) {
-				peak = 10000;
-			}
+	case SYS_LED_PATTERN_CONNECT_HEARTBEAT: { // 蓝·链路常亮（配对完成且 ≥1 台在线）
 		if (daily) {
-			v = breath_shape(phase, 30000, 1200, 1200, peak);
-			st = 20;
+			// 常亮，亮度随在线台数 1→10 渐亮 50%→95%
+			v = 5000 + 500 * (led_tracker_count - 1);
+			if (v > 10000) {
+				v = 10000;
+			}
+			st = 100;
 		} else {
-			uint32_t burst = 240 * led_tracker_count; // 连跳窗口
+			uint32_t phase = (now + 15000) % 30000;
+			uint32_t burst = 240 * led_tracker_count; // 连跳窗口：次数=台数
 			if (phase < burst) {
 				v = ((phase / 120) % 2) ? 10000 : 0;
 			} else {
@@ -462,16 +462,10 @@ static uint32_t led_compute(enum led_ch ch, enum sys_led_pattern p, uint32_t *st
 		break;
 	}
 
-	case SYS_LED_PATTERN_SHORT: { // 蓝·未配对/搜台
+	case SYS_LED_PATTERN_SHORT: { // 蓝·配对模式（等新 tracker）
 		if (daily) {
-			// 30s 栅格双 swell @10s 与 @20s（各 1.2s 升+1.2s 降，峰 60%）——与绿 @0s 等距 10s 交替
-			uint32_t phase = now % 30000;
-			if (phase >= 10000 && phase < 12400) {
-				v = breath_shape(phase - 10000, 2400, 1200, 1200, 6000);
-			} else if (phase >= 20000 && phase < 22400) {
-				v = breath_shape(phase - 20000, 2400, 1200, 1200, 6000);
-			}
-			st = 20;
+			v = ((now / 25) % 2) ? 0 : 10000; // 20Hz 快闪（25ms 亮 / 25ms 灭）
+			st = 25;
 		} else {
 			v = (now % 1000) < 100 ? 10000 : 0; // 100/900 快闪
 			st = 50;
@@ -639,16 +633,37 @@ static uint32_t led_compute(enum led_ch ch, enum sys_led_pattern p, uint32_t *st
 		break;
 	}
 
+	case SYS_LED_PATTERN_IDLE_HEARTBEAT: { // 蓝·待命 lub-dub（日常表）；调试表保持原「无连接=灭」
+		if (daily) {
+			uint32_t phase = now % 1800; // 150ms 亮→300ms 灭→150ms 亮→停 1.2s
+			v = (phase < 150 || (phase >= 450 && phase < 600)) ? 10000 : 0;
+			st = 25;
+		} else {
+			v = 0;
+			st = 100;
+		}
+		break;
+	}
+
+	case SYS_LED_PATTERN_ONESHOT_FULL_COLOR: { // 全彩·命中一台：三通道同 1.2s 三角渐亮渐灭（峰=满刻度）
+		uint32_t i = (*state)++;
+		if (i <= 60) { // 600ms 升 + 600ms 降
+			v = (i <= 30) ? 10000 * i / 30 : 10000 * (60 - i) / 30;
+			st = 20;
+		} else {
+			led_oneshot_done(p);
+			st = 100;
+		}
+		break;
+	}
+
 	case SYS_LED_PATTERN_ERROR_A:
 	case SYS_LED_PATTERN_ERROR_B:
 	case SYS_LED_PATTERN_ERROR_C:
-	case SYS_LED_PATTERN_ERROR_D: { // 错误独占三灯
+	case SYS_LED_PATTERN_ERROR_D: { // 故障：红常亮独占（蓝绿强制取消）
 		if (daily) {
-			// 每 5s 一次红深呼吸（1.2s 起伏，峰 50%）——克制但绝不错过
-			if (ch == LED_CH_R) {
-				v = breath_shape(now % 5000, 5000, 600, 600, 4000);
-			}
-			st = 20;
+			v = (ch == LED_CH_R) ? 10000 : 0; // 红常亮
+			st = 100;
 		} else {
 			// 三色轮播：红→绿→蓝各 500ms 硬切（通道即颜色）
 			uint32_t seg = (now / 500) % 3;
@@ -706,8 +721,9 @@ static bool led_any_on;
 // receiver 无 retained 内存：显示偏好持久化走 NVS（system.h 的 LED_MODE_NVS/LED_BRIGHT_NVS/LED_BIND_NVS）
 static void led_thread(void)
 {
-	/* 0xFF=未初始化哨兵：sys_read 对无条目(-ENOENT)不改写数据，预置初值必须非 0。
-	 * （历史 bug：saved_bright=0 且 NVS 无条目 → 0 落进 0-100 合法分支 → 亮度归零全灭） */
+	/* 0xFF=未初始化哨兵：sys_read 对任何失败（含无条目 -ENOENT）都不再改写缓冲区
+	 *（第六轮 system.c 的 memset 曾把哨兵抹成 0 → 亮度归零全灭；已由 system.c 修复）。
+	 * 预置初值即结果：0xFF 均不落任何合法分支。 */
 	uint8_t saved_mode = 0xFF;
 	uint8_t saved_bright = 0xFF;
 	uint8_t saved_bind[LED_CH_COUNT] = {0xFF, 0xFF, 0xFF}; // 0xFF=未初始化 → 恒等绑定

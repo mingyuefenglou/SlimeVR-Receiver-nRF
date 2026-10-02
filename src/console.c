@@ -1088,10 +1088,12 @@ static void console_thread(void)
 			}
 		} else if (strcmp(argv[0], command_ledbright) == 0) {
 			if (!arg) {
-				printk("ledbright: %u%%（范围 0-100，全局生效，重启保持）\n", get_led_brightness());
+				printk("ledbright: %u%%（0-100，全域最大亮度——所有灯效受它缩放，重启保持）\n",
+				       get_led_brightness());
 			} else {
-				long v = strtol(arg, NULL, 10);
-				if (v < 0 || v > 100) {
+				char *endptr;
+				long v = strtol(arg, &endptr, 10);
+				if (*endptr != '\0' || v < 0 || v > 100) {
 					printk("Invalid. Range 0-100\n");
 				} else {
 					set_led_brightness((uint8_t)v);

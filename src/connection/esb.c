@@ -1346,6 +1346,23 @@ static void print_tracker_stats_batch(void)
 	}
 }
 
+/* 蓝灯单一状态源（幂等）：故障 OFF / 配对 20Hz / 有在线 常亮渐亮 / 否则 lub-dub。
+ * esb_stats_thread 每 500ms 无条件重调——配对命中、finish_pair、错误恢复、清配对
+ * 等一切过渡态都由它自愈；散点一律不得直接写蓝槽。 */
+static void esb_led_sync(void)
+{
+	if (get_status(SYS_STATUS_SENSOR_ERROR) || get_status(SYS_STATUS_CONNECTION_ERROR) ||
+	    get_status(SYS_STATUS_SYSTEM_ERROR)) {
+		set_led(SYS_LED_PATTERN_OFF, SYS_LED_PRIORITY_CONNECTION); // 故障：红由 STATUS 槽独占
+	} else if (esb_pairing) {
+		set_led(SYS_LED_PATTERN_SHORT, SYS_LED_PRIORITY_CONNECTION); // 配对模式：20Hz
+	} else if (esb_get_active_tracker_count() > 0) {
+		set_led(SYS_LED_PATTERN_CONNECT_HEARTBEAT, SYS_LED_PRIORITY_CONNECTION); // 在线：常亮渐亮
+	} else {
+		set_led(SYS_LED_PATTERN_IDLE_HEARTBEAT, SYS_LED_PRIORITY_CONNECTION); // 待命：lub-dub
+	}
+}
+
 static void esb_stats_thread(void)
 {
 	last_tps_print_time = k_uptime_get();
@@ -1353,17 +1370,13 @@ static void esb_stats_thread(void)
 	uint8_t led_last_count = 0xFF;
 	while (1) {
 		k_msleep(TPS_MONITOR_INTERVAL_MS);
-		// LED：台数变化时刷新（蓝心跳充沛度/连跳次数；无连接→OFF，配对期除外）
+		// LED：台数计数随变化更新；蓝灯状态源每 500ms 无条件重设（幂等自愈）
 		uint8_t cnt = esb_get_active_tracker_count();
 		if (cnt != led_last_count) {
 			led_last_count = cnt;
 			led_set_tracker_count(cnt > 0 ? cnt : 1);
-			if (cnt > 0) {
-				set_led(SYS_LED_PATTERN_CONNECT_HEARTBEAT, SYS_LED_PRIORITY_CONNECTION);
-			} else if (!esb_pairing) {
-				set_led(SYS_LED_PATTERN_OFF, SYS_LED_PRIORITY_CONNECTION);
-			}
 		}
+		esb_led_sync();
 
 		uint64_t now = (uint64_t)k_uptime_get();
 
@@ -2918,7 +2931,7 @@ static bool esb_parse_pair(const uint8_t packet[8])
 		int assigned_id = esb_add_pair(found_addr, false);
 		if (assigned_id >= 0) {
 			send_tracker_id = (uint16_t)assigned_id;
-			set_led(SYS_LED_PATTERN_ONESHOT_PROGRESS, SYS_LED_PRIORITY_HIGHEST);
+			set_led(SYS_LED_PATTERN_ONESHOT_FULL_COLOR, SYS_LED_PRIORITY_HIGHEST); // 命中一台：全彩渐亮渐灭
 		} else if (assigned_id == -ENOSPC) {
 			LOG_WRN("Maximum tracker slots reached, cannot pair %012llX", found_addr);
 		} else {
@@ -2939,7 +2952,7 @@ void esb_start_pairing(void)
 	pairing_target_count = 0; // No limit
 	pairing_initial_count = stored_trackers;
 	k_msgq_purge(&esb_pairing_msgq);
-	set_led(SYS_LED_PATTERN_SHORT, SYS_LED_PRIORITY_CONNECTION);
+	esb_led_sync(); // 进入配对：蓝 20Hz
 }
 
 void esb_start_pairing_with_count(uint8_t target_count)
@@ -2950,7 +2963,7 @@ void esb_start_pairing_with_count(uint8_t target_count)
 	pairing_target_count = target_count;
 	pairing_initial_count = stored_trackers;
 	k_msgq_purge(&esb_pairing_msgq);
-	set_led(SYS_LED_PATTERN_SHORT, SYS_LED_PRIORITY_CONNECTION);
+	esb_led_sync(); // 进入配对：蓝 20Hz
 }
 
 // Process new device pairing requests from the queue (called from esb_thread, non-blocking)
@@ -2971,7 +2984,7 @@ static void process_pairing_queue(void)
 		// Device is now registered — ack_handler will respond on the
 		// next pairing step 1 via esb_find_tracker() lookup.
 		LOG_INF("New device registered, ack_handler will respond on next step 1");
-		set_led(SYS_LED_PATTERN_ONESHOT_COMPLETE, SYS_LED_PRIORITY_HIGHEST); // 入网确认
+		set_led(SYS_LED_PATTERN_ONESHOT_FULL_COLOR, SYS_LED_PRIORITY_HIGHEST); // 入网确认：全彩渐亮渐灭
 	}
 }
 
@@ -2990,7 +3003,7 @@ void esb_finish_pair(void)
 	pairing_target_reached_time = 0;
 	pairing_new_devices_blocked = false;
 	k_msgq_purge(&esb_pairing_msgq);
-	set_led(SYS_LED_PATTERN_OFF, SYS_LED_PRIORITY_CONNECTION);
+	esb_led_sync(); // 退出配对：按在线台数回常亮 / 无在线回 lub-dub
 	LOG_INF("Pairing mode disabled");
 }
 
@@ -3036,6 +3049,7 @@ void esb_clear(void)
 	LOG_INF("Packet sequence state and statistics reset for all trackers");
 
 	hid_reset_all_rssi_smooth();
+	esb_led_sync(); // 清配对后立即回待命态
 	esb_clearing = false;
 }
 
@@ -3937,8 +3951,8 @@ static void esb_thread(void)
 		pairing_target_count = 0;
 		pairing_initial_count = 0;
 		LOG_INF("No stored trackers, pairing mode auto-enabled");
-		set_led(SYS_LED_PATTERN_SHORT, SYS_LED_PRIORITY_CONNECTION);
 	}
+	esb_led_sync(); // 开机蓝灯初始态：配对 20Hz / 否则 lub-dub（存储记录不算在线）
 
 	while (1) {
 		tracker_events_process(k_uptime_get_32());

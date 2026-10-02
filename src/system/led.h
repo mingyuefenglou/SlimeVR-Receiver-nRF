@@ -64,8 +64,10 @@ enum sys_led_pattern {
 	SYS_LED_PATTERN_DFU,       // Fast yellow pulse								// DFU/OTA update mode
 
 	// ---- 三通道新增 pattern（旧调用点零改动，新语义由分配表承载）----
-	SYS_LED_PATTERN_CONNECT_HEARTBEAT, // 蓝·链路心跳（配对成功后由 esb 设回）
+	SYS_LED_PATTERN_CONNECT_HEARTBEAT, // 蓝·链路常亮（亮度随在线台数渐亮；esb 单一状态源维护）
 	SYS_LED_PATTERN_CAL_PROGRESS,      // 红→绿随进度插值（进度经 led_cal_progress 全局）
+	SYS_LED_PATTERN_IDLE_HEARTBEAT,     // 蓝·待命 lub-dub 双击心跳（非配对且无在线设备）
+	SYS_LED_PATTERN_ONESHOT_FULL_COLOR, // 全彩渐亮渐灭 1.2s（配对每命中一台播一次）
 
 	SYS_LED_PATTERN__COUNT,
 };

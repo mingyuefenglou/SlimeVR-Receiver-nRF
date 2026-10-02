@@ -390,14 +390,14 @@ void sys_read(uint16_t id, void* data, size_t len) {
 	{
 		if (err == -ENOENT) // suppress ENOENT
 		{
-			LOG_DBG("No entry exists for ID %d, read data set to zero", id);
+			LOG_DBG("No entry exists for ID %d, buffer left untouched", id);
 		}
 		else
 		{
 			LOG_ERR("Failed to read from NVS, error: %d", err);
-			LOG_WRN("Read data set to zero");
+			LOG_WRN("Buffer left untouched");
 		}
-		memset(data, 0, len);
+		// 任何失败都不改动调用方缓冲区（0xFF 哨兵语义依赖此约定；所有调用方自带初值）
 		return;
 	}
 }
